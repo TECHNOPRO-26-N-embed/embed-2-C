@@ -483,37 +483,59 @@
 > ※ 各関数・部品が「単体で正しく動くか」を確認するテスト項目を設計します。
 > 「実際の結果」欄は実装後に記入します。
 
-### 5-1. 入力系テスト
+### 5-1. 入力・コマンド変換テスト（`readRemoteCommand()` / `mapRawCodeToCommand()`）
 
 | No | テスト対象の関数 | 入力・操作 | 期待する結果 | 実際の結果 | 合否 |
 |:---|:---|:---|:---|:---|:---|
-| 1 | readRemoteCommand() | 割当済みボタンを1回押す | 対応するcommandが1回だけ返る | | [ ] |
-| 2 | readRemoteCommand() | 同一ボタンを50ms以内で連打する | 1回分のみ受理される | | [ ] |
-| 3 | readEnvironment() | 室温環境で30秒動作 | 温湿度が約1秒周期で更新される | | [ ] |
-| 4 | readEnvironment() | DHT11を一時切断する | 連続失敗カウントが増え、3回で安全側に遷移 | | [ ] |
-| 5 | checkMotionGate() | PIRに単発HIGHを入力する | motionDetectedが即trueにならない | | [ ] |
-| 6 | evaluateAutoFanCondition() | temperatureC=25.0, humidityPct=59, motionDetected=true | true を返す（温度しきい値境界） | | [ ] |
-| 7 | evaluateAutoFanCondition() | temperatureC=24.9, humidityPct=60.0, motionDetected=true | true を返す（湿度しきい値境界） | | [ ] |
-| 8 | checkMotionGate() | PIRを2回連続HIGHにする | motionDetected=true になる | | [ ] |
+| 1 | readRemoteCommand() | 電源ボタンを1回押す | `CMD_POWER_TOGGLE` を返す | | [ ] |
+| 2 | readRemoteCommand() | 1ボタンを1回押す | `CMD_SHOW_TEMP` を返す | | [ ] |
+| 3 | readRemoteCommand() | 2ボタンを1回押す | `CMD_SHOW_HUM` を返す | | [ ] |
+| 4 | readRemoteCommand() | 3ボタンを1回押す | `CMD_DISPLAY_OFF` を返す | | [ ] |
+| 5 | readRemoteCommand() | 4/5/6ボタンを押す | それぞれ `CMD_FAN_LOW` / `CMD_FAN_STOP` / `CMD_FAN_HIGH` を返す | | [ ] |
+| 6 | readRemoteCommand() | 未割当ボタンを押す | `CMD_NONE` を返す（状態変化なし） | | [ ] |
+| 7 | readRemoteCommand() | 同一ボタンを50ms以内で連打する | 1回分のみ受理（デバウンス） | | [ ] |
 
-### 5-2. 出力系テスト
+### 5-2. センサー・条件判定テスト（`readEnvironment()` / `checkMotionGate()` / `evaluateAutoFanCondition()`）
 
 | No | テスト対象の関数 | 入力・操作 | 期待する結果 | 実際の結果 | 合否 |
 |:---|:---|:---|:---|:---|:---|
-| 1 | applyFanOutput(0) | level=0を渡す | モーター停止（PWM=0） | | [ ] |
-| 2 | applyFanOutput(3) | level=3を10分以上維持 | 自動で中速（level=2）へ降格 | | [ ] |
-| 3 | updateDisplay() | displayModeを温度/湿度で切替 | 7セグ表示が切り替わる | | [ ] |
-| 4 | updateDisplay() | sensorErrorCount>=3 にする | Err表示を優先する | | [ ] |
-| 5 | applyFanOutput(255) | 範囲外levelを渡す | 停止（PWM=0）として扱う | | [ ] |
+| 1 | readEnvironment() | 室温環境で30秒動作 | 温湿度が約1秒周期で更新される | | [ ] |
+| 2 | readEnvironment() | DHT11を一時切断する | `sensorErrorCount` が増加する | | [ ] |
+| 3 | checkMotionGate() | PIRに単発HIGHを入力する | `motionDetected` は true にならない | | [ ] |
+| 4 | checkMotionGate() | PIRを2回連続HIGHにする | `motionDetected` が true になる | | [ ] |
+| 5 | evaluateAutoFanCondition() | `temperatureC=25.0, humidityPct=59.0, motionDetected=true` | true（温度しきい値境界） | | [ ] |
+| 6 | evaluateAutoFanCondition() | `temperatureC=24.9, humidityPct=60.0, motionDetected=true` | true（湿度しきい値境界） | | [ ] |
+| 7 | evaluateAutoFanCondition() | `temperatureC=26.0, humidityPct=65.0, motionDetected=false` | false（人感ゲートで抑止） | | [ ] |
+| 8 | evaluateAutoFanCondition() | `sensorErrorCount>=3` | false（異常時は自動送風しない） | | [ ] |
 
-### 5-3. タイミング・並行動作テスト
+### 5-3. 状態遷移・リモコン反映テスト（`applyRemoteCommand()` / `updateStateByDesign()`）
 
-| No | テスト内容 | テスト手順 | 期待する結果 | 実際の結果 | 合否 |
+| No | テスト対象の関数 | 入力・操作 | 期待する結果 | 実際の結果 | 合否 |
 |:---|:---|:---|:---|:---|:---|
-| 1 | 非ブロッキング動作確認 | 7セグ更新中にIR操作を連続入力する | 入力遅延なくファンレベルが変化する | | [ ] |
-| 2 | millis()タイマーの周期精度 | センサー更新間隔をシリアル時刻で確認 | DHT11:約1000ms、表示:約250msで動作する | | [ ] |
-| 3 | 手動固定動作 | AUTO_FAN中に弱ボタン押下後、温湿度を閾値未満にする | MANUALを維持し自動へ戻らない | | [ ] |
-| 4 | 電源状態遷移 | MANUAL中に電源OFF→ONを押す | POWER_OFFを経てAUTO_MONITORへ復帰する | | [ ] |
+| 1 | applyRemoteCommand() | 電源ON中に電源ボタンを押す | `powerOn=false`, `currentState=POWER_OFF`, `fanLevel=0` | | [ ] |
+| 2 | applyRemoteCommand() | 電源OFF中に電源ボタンを押す | `powerOn=true`, `currentState=AUTO_MONITOR` へ復帰 | | [ ] |
+| 3 | applyRemoteCommand() | 電源OFF中に1〜6ボタンを押す | 電源ボタン以外は無視（状態変化なし） | | [ ] |
+| 4 | applyRemoteCommand() | 1/2/3ボタンを押す | 表示モードが温度/湿度/非表示へ切替 | | [ ] |
+| 5 | applyRemoteCommand() | 4/5/6ボタンを押す | `fanLevel=1/0/3` になり `currentState=MANUAL` へ遷移 | | [ ] |
+| 6 | updateStateByDesign() | `AUTO_MONITOR` で自動条件成立 | `AUTO_FAN` へ遷移 | | [ ] |
+| 7 | updateStateByDesign() | `AUTO_FAN` で条件不成立 | `AUTO_MONITOR` へ戻り `fanLevel=0` | | [ ] |
+| 8 | updateStateByDesign() | `MANUAL` 中に自動条件不成立 | `MANUAL` を維持（電源OFFまで固定） | | [ ] |
+| 9 | updateStateByDesign() | `sensorErrorCount>=3` | 安全側で `fanLevel=0` | | [ ] |
+
+### 5-4. 出力・タイミングテスト（`updateDisplay()` / `applyFanOutput()`）
+
+| No | テスト対象の関数 | 入力・操作 | 期待する結果 | 実際の結果 | 合否 |
+|:---|:---|:---|:---|:---|:---|
+| 1 | updateDisplay() | `displayMode=DISPLAY_TEMP` | 温度値を7セグ表示 | | [ ] |
+| 2 | updateDisplay() | `displayMode=DISPLAY_HUM` | 湿度値を7セグ表示 | | [ ] |
+| 3 | updateDisplay() | `displayMode=DISPLAY_OFF` または `powerOn=false` | 7セグ消灯 | | [ ] |
+| 4 | updateDisplay() | `sensorErrorCount>=3` | `Err` 表示を優先 | | [ ] |
+| 5 | applyFanOutput(0) | level=0 | PWM=0（停止） | | [ ] |
+| 6 | applyFanOutput(1) | level=1 | PWM=85（弱） | | [ ] |
+| 7 | applyFanOutput(2) | level=2 | PWM=170（中） | | [ ] |
+| 8 | applyFanOutput(3) | level=3を10分以上維持 | 自動でlevel=2へ降格 | | [ ] |
+| 9 | applyFanOutput(255) | 範囲外level | PWM=0（安全側停止） | | [ ] |
+| 10 | loop全体 | IR連続操作しながら表示更新を観察 | 非ブロッキングで操作遅延がない | | [ ] |
 
 ---
 
